@@ -1,0 +1,276 @@
+[gd_scene format=3 uid="uid://ceonge8pj3vy4"]
+
+[ext_resource type="Script" uid="uid://c4s8njd8lb02u" path="res://scripts/player.gd" id="1_3vyb7"]
+[ext_resource type="Script" uid="uid://vbe4lcy30i62" path="res://scripts/camera_2d.gd" id="2_g2els"]
+[ext_resource type="Texture2D" uid="uid://c8tnjej3lqhuk" path="res://icon.svg" id="3_qhqgy"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_u8vuu"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_3vyb7"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_g2els"]
+
+[sub_resource type="Animation" id="Animation_qhqgy"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("parts/eye2:position")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Vector2(6.0000005, -9.625)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("parts/eye1:position")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Vector2(-5.9999995, -9.625)]
+}
+
+[sub_resource type="Animation" id="Animation_qlg0r"]
+resource_name = "jump"
+length = 0.16666667
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("parts/eye1:position")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.100000024),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Vector2(-5.9999995, -9.625), Vector2(-4.0000005, -12)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("parts/eye2:position")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.100000024),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Vector2(6.0000005, -9.625), Vector2(4, -12)]
+}
+
+[sub_resource type="Animation" id="Animation_dqkch"]
+resource_name = "run"
+length = 0.16666667
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("parts/eye2:position")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.099999994),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Vector2(6.0000005, -9.625), Vector2(7, -9.625)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("parts/eye1:position")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.099999994),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Vector2(-5.9999995, -9.625), Vector2(1.999999, -9.625)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_qlg0r"]
+_data = {
+&"RESET": SubResource("Animation_qhqgy"),
+&"jump": SubResource("Animation_qlg0r"),
+&"run": SubResource("Animation_dqkch")
+}
+
+[sub_resource type="GDScript" id="GDScript_qhqgy"]
+script/source = "extends CharacterBody2D
+
+# --- Экспортируемые параметры ---
+@export var max_radius: float = 150.0          # максимальное расстояние от центра игрока
+@export var arm_speed: float = 2000.0          # сила ускорения от джойстика
+@export var pull_force: float = 200.0          # сила подтягивания игрока при упоре
+
+# Имена действий для управления (должны быть созданы в Input Map)
+@export var action_left: String = \"MyArmLeft\"
+@export var action_right: String = \"MyArmRight\"
+@export var action_up: String = \"MyArmUp\"
+@export var action_down: String = \"MyArmDown\"
+
+# --- Ссылки ---
+@onready var player: CharacterBody2D = get_parent()
+@onready var sprite: Sprite2D = $Sprite2D
+
+func _physics_process(delta):
+	if not player:
+		return
+
+	# 1. Получаем вектор управления (отдельные действия)
+	var input_dir = Vector2.ZERO
+	if Input.is_action_pressed(action_right):
+		input_dir.x += 1
+	if Input.is_action_pressed(action_left):
+		input_dir.x -= 1
+	if Input.is_action_pressed(action_down):
+		input_dir.y += 1
+	if Input.is_action_pressed(action_up):
+		input_dir.y -= 1
+
+	if input_dir.length() > 0:
+		input_dir = input_dir.normalized()
+
+	# 2. Применяем ускорение от джойстика
+	if input_dir.length() > 0:
+		velocity += input_dir * arm_speed * delta
+		if sprite:
+			sprite.rotation = input_dir.angle()
+	else:
+		# Трение (плавная остановка)
+		velocity = velocity.move_toward(Vector2.ZERO, arm_speed * delta * 0.5)
+
+	# 3. Движение с учётом коллизий (автоматическое скольжение по стенам)
+	move_and_slide()
+
+	# 4. Подтягивание игрока при каждом столкновении (опционально)
+	for i in get_slide_collision_count():
+		var collision = get_slide_collision(i)
+		apply_pull(collision.get_normal(), delta)
+
+	# 5. Жёсткое ограничение радиуса (без пружины)
+	var to_player = player.global_position - global_position
+	var dist = to_player.length()
+	if dist > max_radius:
+		var dir_to_player = to_player.normalized()
+		# Корректируем позицию: ставим руку на границу круга
+		global_position = player.global_position - dir_to_player * max_radius
+		# Обнуляем радиальную скорость, направленную ОТ игрока
+		var radial_vel = velocity.dot(-dir_to_player)  # >0 если скорость наружу
+		if radial_vel > 0:
+			velocity -= -dir_to_player * radial_vel
+
+func apply_pull(normal: Vector2, delta: float):
+	# Толкаем игрока в направлении нормали (от стены)
+	player.velocity += normal * pull_force * delta * 10
+"
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_dqkch"]
+
+[node name="Player" type="CharacterBody2D" unique_id=1533145718]
+collision_layer = 2
+script = ExtResource("1_3vyb7")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=525743827]
+shape = SubResource("CapsuleShape2D_u8vuu")
+
+[node name="parts" type="Node2D" parent="." unique_id=582304146]
+
+[node name="body" type="MeshInstance2D" parent="parts" unique_id=1911560689]
+position = Vector2(8.344649e-07, 1.5497208e-06)
+scale = Vector2(20, 15.000001)
+mesh = SubResource("CapsuleMesh_3vyb7")
+
+[node name="eye1" type="MeshInstance2D" parent="parts" unique_id=1307075701]
+modulate = Color(0, 0, 0, 1)
+position = Vector2(-5.9999995, -9.625)
+scale = Vector2(3.5034015, 3.2500014)
+mesh = SubResource("SphereMesh_g2els")
+
+[node name="eye2" type="MeshInstance2D" parent="parts" unique_id=456814757]
+modulate = Color(0, 0, 0, 1)
+position = Vector2(6.0000005, -9.625)
+scale = Vector2(3.5034015, 3.2500014)
+mesh = SubResource("SphereMesh_g2els")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=639730452]
+libraries/ = SubResource("AnimationLibrary_qlg0r")
+autoplay = &"RESET"
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1687462920]
+zoom = Vector2(1.68, 1.68)
+script = ExtResource("2_g2els")
+
+[node name="ControlUI" type="Control" parent="." unique_id=863962662]
+z_index = 3
+layout_mode = 3
+anchors_preset = 0
+offset_left = -321.0
+offset_top = 13.0
+offset_right = 320.0
+offset_bottom = 166.0
+
+[node name="TouchScreenButtonLeft" type="TouchScreenButton" parent="ControlUI" unique_id=1192169420]
+scale = Vector2(0.40000117, 0.3199991)
+texture_normal = ExtResource("3_qhqgy")
+action = "ui_left"
+
+[node name="TouchScreenButtonRight" type="TouchScreenButton" parent="ControlUI" unique_id=180259626]
+position = Vector2(108.99999, 0)
+scale = Vector2(0.40000117, 0.3199991)
+texture_normal = ExtResource("3_qhqgy")
+action = "ui_right"
+
+[node name="TouchScreenButtonUp" type="TouchScreenButton" parent="ControlUI" unique_id=1244359809]
+position = Vector2(53.999996, -40)
+scale = Vector2(0.40000117, 0.3199991)
+texture_normal = ExtResource("3_qhqgy")
+action = "ui_accept"
+
+[node name="TouchScreenButtonDown" type="TouchScreenButton" parent="ControlUI" unique_id=509631488]
+position = Vector2(53.999996, 42)
+scale = Vector2(0.40000117, 0.3199991)
+texture_normal = ExtResource("3_qhqgy")
+action = "ui_down"
+
+[node name="TouchScreenButtonArmL" type="TouchScreenButton" parent="ControlUI" unique_id=1002337761]
+position = Vector2(442.00006, -1)
+scale = Vector2(0.40000117, 0.3199991)
+texture_normal = ExtResource("3_qhqgy")
+action = "MyArmLeft"
+
+[node name="TouchScreenButtonArmR" type="TouchScreenButton" parent="ControlUI" unique_id=526330818]
+position = Vector2(538, -2)
+scale = Vector2(0.40000117, 0.3199991)
+texture_normal = ExtResource("3_qhqgy")
+action = "MyArmRight"
+
+[node name="TouchScreenButtonArmU" type="TouchScreenButton" parent="ControlUI" unique_id=1095746796]
+position = Vector2(490, -39)
+scale = Vector2(0.40000117, 0.3199991)
+texture_normal = ExtResource("3_qhqgy")
+action = "MyArmUp"
+
+[node name="TouchScreenButtonArmD2" type="TouchScreenButton" parent="ControlUI" unique_id=957686129]
+position = Vector2(491.00003, 37)
+scale = Vector2(0.40000117, 0.3199991)
+texture_normal = ExtResource("3_qhqgy")
+action = "MyArmDown"
+
+[node name="Arm" type="CharacterBody2D" parent="." unique_id=1828121776]
+position = Vector2(41, -1)
+collision_layer = 4
+script = SubResource("GDScript_qhqgy")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Arm" unique_id=1579568288]
+shape = SubResource("RectangleShape2D_dqkch")
+
+[node name="Sprite2D" type="Sprite2D" parent="Arm" unique_id=93663425]
+position = Vector2(-0.500002, 2.2053719e-06)
+scale = Vector2(0.16406253, 0.15625003)
+texture = ExtResource("3_qhqgy")
